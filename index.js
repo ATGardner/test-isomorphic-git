@@ -1,10 +1,11 @@
-import { clone } from "isomorphic-git";
-import http from "isomorphic-git/http/node/index.cjs";
-import fs from "node:fs";
-import { getHeapStatistics } from "node:v8";
-import { setTimeout } from "node:timers/promises";
+import { clone } from "isomorphic-git"
+import http from "isomorphic-git/http/node/index.cjs"
+import fs, { mkdirSync, rmSync } from "node:fs"
+import { setTimeout } from "node:timers/promises"
+import { getHeapStatistics } from "node:v8"
+import { simpleGit } from "simple-git"
 
-async function cloneRepo(repoUrl, dir) {
+async function cloneRepoUsingIsomorphicGit(repoUrl, dir) {
   try {
     await clone({
       fs,
@@ -14,9 +15,24 @@ async function cloneRepo(repoUrl, dir) {
       singleBranch: true,
       depth: 1,
     });
-    console.log("Repository cloned successfully!");
+    console.log("Repository cloned successfully using isomorphic-git!");
   } catch (error) {
-    console.error("Error cloning repository:", error);
+    console.error("Error cloning repository using isomorphic-git", error);
+  }
+}
+
+async function cloneRepoUsingSimpleGit(repoUrl, dir) {
+  try {
+    const git = simpleGit().env({
+      GIT_CONFIG_GLOBAL: "/dev/null", // Prevent global git config from being used
+      GIT_CONFIG_SYSTEM: "/dev/null", // Prevent system git config from being used
+      GIT_CONFIG_NOSYSTEM: "1", // Prevent system git config from being used
+      GIT_TERMINAL_PROMPT: "0", // Disable interactive prompts
+    });
+    await git.clone(repoUrl, dir)
+    console.log("Repository cloned successfully using simple-git!");
+  } catch (error) {
+    console.error("Error cloning repository using simple-git", error);
   }
 }
 
@@ -50,6 +66,13 @@ function getMemoryData() {
   };
 }
 
+function deleteDirectory(dir) {
+  if (fs.existsSync(dir)) {
+    console.log(`Deleting directory: ${dir}`);
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   const repoUrl = process.argv[2];
   if (!repoUrl) {
@@ -67,11 +90,15 @@ async function main() {
     process.exit(1);
   }
 
+  deleteDirectory(dir);
+
   const beforeStats = getMemoryData();
-  console.log("Memory usage before cloning:", beforeStats);
-  await cloneRepo(repoUrl, dir);
+  console.log("Memory usage before cloning:", beforeStats, repoUrl);
+  console.time()
+  await cloneRepoUsingSimpleGit(repoUrl, dir);
+  console.timeEnd()
   const afterStats = getMemoryData();
-  console.log("Memory usage after cloning:", afterStats);
+  console.log("Memory usage after cloning:", afterStats, repoUrl);
   await setTimeout(10000); // Wait for 10 second to allow memory stats to stabilize
   const finalStats = getMemoryData();
   console.log("Final memory usage:", finalStats);
